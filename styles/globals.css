@@ -1,0 +1,6 @@
+/* 移除所有 Tailwind 引用，只保留必要的全局样式 */
+* {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
