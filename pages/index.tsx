@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { 
   Container,
   Paper,
@@ -15,16 +15,10 @@ import DeleteIcon from '@mui/icons-material/Delete'
 import AddIcon from '@mui/icons-material/Add'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import ExpandLessIcon from '@mui/icons-material/ExpandLess'
+import ContentCopyIcon from '@mui/icons-material/ContentCopy'
+import { translations, getLanguage } from '../locales/translations'
 
 interface Parameter {
-  name: string;
-  description: string;
-  type: 'string' | 'number' | 'object' | 'array';
-  properties?: Parameter[];  // 子参数列表
-  items?: Parameter;  // 新增 items 字段用于 array 类型
-}
-
-interface ReturnValue {
   name: string;
   description: string;
   type: 'string' | 'number' | 'object' | 'array';
@@ -36,7 +30,7 @@ interface ApiInterface {
   name: string;
   description: string;
   parameters: Parameter[];
-  returnValues: ReturnValue[];
+  response: Parameter[];
 }
 
 export default function Home() {
@@ -44,15 +38,23 @@ export default function Home() {
     name: '',
     description: '',
     parameters: [{ name: '', description: '', type: 'string', properties: [] }],
-    returnValues: [{ name: '', description: '', type: 'string', properties: [] }]
+    response: [{ name: '', description: '', type: 'string', properties: [] }]
   })
 
   const [generatedJson, setGeneratedJson] = useState<string>('')
   const [expandedRows, setExpandedRows] = useState<{[key: string]: boolean}>({})
   const [expandedParams, setExpandedParams] = useState<{[key: string]: boolean}>({})
   const [parametersKey, setParametersKey] = useState<'parameters' | 'arguments'>('parameters')
-  const [responseKey, setResponseKey] = useState<'response' | 'result' | 'return'>('response')
+  const [responseKey, setResponseKey] = useState<'response' | 'result' | 'return' | 'returnValue'>('response')
   const [errors, setErrors] = useState<{[key: string]: boolean}>({})
+  const [lang, setLang] = useState<'en' | 'zh'>('en')
+  const [copySuccess, setCopySuccess] = useState(false)
+
+  useEffect(() => {
+    setLang(getLanguage())
+  }, [])
+
+  const t = translations[lang]
 
   const toggleExpand = (key: string) => {
     setExpandedRows(prev => ({
@@ -69,7 +71,7 @@ export default function Home() {
   }
 
   // 递归处理参数对象
-  const processParameter = (param: Parameter) => {
+  const processParameter = (param: Parameter): any => {
     // 如果参数没有名称，返回 null
     if (!param.name.trim()) {
       return null;
@@ -79,7 +81,7 @@ export default function Home() {
       return null;
     }
 
-    const result: any = {
+    const result: { [key: string]: any } = {
       type: param.type,
     };
     
@@ -93,7 +95,7 @@ export default function Home() {
         return null;
       }
       
-      const properties = param.properties.reduce((acc, prop) => {
+      const properties = param.properties.reduce((acc: { [key: string]: any }, prop) => {
         const processed = processParameter(prop);
         if (processed !== null) {
           acc[prop.name] = processed;
@@ -108,10 +110,9 @@ export default function Home() {
     }
 
     if (param.type === 'array' && param.items) {
-      result.items = processParameter(param.items);
-      // 如果 items 处理结果为 null，返回 null
-      if (result.items === null) {
-        return null;
+      const processedItems = processParameter(param.items);
+      if (processedItems !== null) {
+        result.items = processedItems;
       }
     }
 
@@ -176,7 +177,7 @@ export default function Home() {
     });
 
     // 检查返回值列表
-    apiInterface.returnValues.forEach((ret, index) => {
+    apiInterface.response.forEach((ret, index) => {
       if (validateParameter(ret, `returnValue-${index}`)) {
         hasError = true;
       }
@@ -187,7 +188,7 @@ export default function Home() {
     }
 
     // 构建参数对象
-    const parameters = apiInterface.parameters.reduce((acc, param) => {
+    const parameters = apiInterface.parameters.reduce((acc: { [key: string]: any }, param) => {
       const processed = processParameter(param);
       if (processed !== null) {
         acc[param.name] = processed;
@@ -196,7 +197,7 @@ export default function Home() {
     }, {});
 
     // 构建返回值对象
-    const response = apiInterface.returnValues.reduce((acc, ret) => {
+    const response = apiInterface.response.reduce((acc: { [key: string]: any }, ret) => {
       const processed = processParameter(ret);
       if (processed !== null) {
         acc[ret.name] = processed;
@@ -205,7 +206,7 @@ export default function Home() {
     }, {});
 
     // 构建最终的JSON对象
-    const jsonOutput = {
+    const jsonOutput: { [key: string]: any } = {
       name: apiInterface.name,
       description: apiInterface.description,
     };
@@ -233,7 +234,7 @@ export default function Home() {
   const addReturnValue = () => {
     setApiInterface(prev => ({
       ...prev,
-      returnValues: [...prev.returnValues, { name: '', description: '', type: 'string', properties: [] }]
+      response: [...prev.response, { name: '', description: '', type: 'string', properties: [] }]
     }))
   }
 
@@ -272,8 +273,8 @@ export default function Home() {
         
         return { ...prev, parameters: newParameters };
       } else {
-        const newReturnValues = [...prev.returnValues];
-        let currentRet = newReturnValues[parameterIndex];
+        const newResponse = [...prev.response];
+        let currentRet = newResponse[parameterIndex];
         
         // 找到要添加属性的父级
         for (const pathSegment of parentPath) {
@@ -298,7 +299,7 @@ export default function Home() {
           type: 'string'
         });
         
-        return { ...prev, returnValues: newReturnValues };
+        return { ...prev, response: newResponse };
       }
     });
   };
@@ -326,10 +327,10 @@ export default function Home() {
     }))
   }
 
-  const updateReturnValue = (index: number, field: keyof ReturnValue, value: string) => {
+  const updateReturnValue = (index: number, field: keyof Parameter, value: string) => {
     setApiInterface(prev => ({
       ...prev,
-      returnValues: prev.returnValues.map((ret, i) => {
+      response: prev.response.map((ret, i) => {
         if (i !== index) return ret;
         const updatedRet = { ...ret, [field]: value };
         // 如果类型改为 object，添加一个默认的空属性
@@ -351,7 +352,7 @@ export default function Home() {
 
   const updateSubParameter = (
     parameterIndex: number,
-    subParameterPath: (number | 'items')[],
+    subParameterPath: (number | string)[],
     field: keyof Parameter,
     value: string,
     parentType: 'parameter' | 'returnValue',
@@ -376,7 +377,7 @@ export default function Home() {
                   // 不允许修改 items 的名称
                   return prev;
                 }
-                currentParam.items[field] = value;
+                (currentParam.items as any)[field] = value;
                 // 如果类型改为 object，添加一个默认的空属性
                 if (field === 'type' && value === 'object' && (!currentParam.items.properties || currentParam.items.properties.length === 0)) {
                   currentParam.items.properties = [{ name: '', description: '', type: 'string' }];
@@ -417,11 +418,11 @@ export default function Home() {
         
         return { ...prev, parameters: newParameters };
       } else {
-        const newReturnValues = [...prev.returnValues];
-        let currentRet = newReturnValues[parameterIndex];
+        const newResponse = [...prev.response];
+        let currentRet = newResponse[parameterIndex];
         
         // 遍历路径找到目标属性
-        for (let i = 0; i <subParameterPath.length; i++) {
+        for (let i = 0; i < subParameterPath.length; i++) {
           const pathSegment = subParameterPath[i];
           if (pathSegment === 'items') {
             if (currentRet.type === 'array') {
@@ -434,7 +435,7 @@ export default function Home() {
                   // 不允许修改 items 的名称
                   return prev;
                 }
-                currentRet.items[field] = value;
+                (currentRet.items as any)[field] = value;
                 // 如果类型改为 object，添加一个默认的空属性
                 if (field === 'type' && value === 'object' && (!currentRet.items.properties || currentRet.items.properties.length === 0)) {
                   currentRet.items.properties = [{ name: '', description: '', type: 'string' }];
@@ -473,7 +474,7 @@ export default function Home() {
           }
         }
         
-        return { ...prev, returnValues: newReturnValues };
+        return { ...prev, response: newResponse };
       }
     });
   };
@@ -504,7 +505,7 @@ export default function Home() {
             currentParam = currentParam.properties[pathSegment];
           }
         }
-
+        
         // 确定要删除属性的位置
         const lastSegment = subParameterPath[subParameterPath.length - 1];
         if (typeof lastSegment === 'number') {
@@ -515,8 +516,8 @@ export default function Home() {
         
         return { ...prev, parameters: newParameters };
       } else {
-        const newReturnValues = [...prev.returnValues];
-        let currentRet = newReturnValues[parameterIndex];
+        const newResponse = [...prev.response];
+        let currentRet = newResponse[parameterIndex];
         
         // 遍历路径找到要删除的属性所在的数组
         for (let i = 0; i < subParameterPath.length - 1; i++) {
@@ -538,7 +539,7 @@ export default function Home() {
           }
         }
         
-        return { ...prev, returnValues: newReturnValues };
+        return { ...prev, response: newResponse };
       }
     });
   };
@@ -571,7 +572,7 @@ export default function Home() {
               fullWidth
               size="small"
               variant="outlined"
-              label="描述"
+              label={t.propertyDescription}
               value={parameter.items.description || ''}
               onChange={(e) => {
                 const newPath = [...parentPath, 'items'];
@@ -592,7 +593,7 @@ export default function Home() {
               size="small"
               variant="outlined"
               select
-              label="类型"
+              label={t.propertyType}
               value={parameter.items.type || 'string'}
               onChange={(e) => {
                 const newPath = [...parentPath, 'items'];
@@ -644,20 +645,20 @@ export default function Home() {
     const isExpanded = expandedParams[paramPath] === true // 默认收起
 
     return (
-      <Box sx={{ pl: 4, pt: 2 }}>
+      <Box sx={{ pl: 4, pt: 2, mb: 2 }}>
         {parameter.properties.map((subParam, index) => (
-          <Box key={index}>
+          <Box key={index} sx={{ mb: 2 }}>
             <Grid container spacing={2} alignItems="center">
               <Grid item xs={4}>
                 <TextField
                   fullWidth
                   size="small"
                   variant="outlined"
-                  label="属性名称"
+                  label={parentType === 'parameter' ? t.parameterName : t.returnValueName}
                   value={subParam.name}
                   onChange={(e) => updateSubParameter(parameterIndex, [...parentPath, index], 'name', e.target.value, parentType)}
                   error={errors[`${paramPath}-${index}-name`]}
-                  helperText={errors[`${paramPath}-${index}-name`] ? '属性名称不能为空' : ''}
+                  helperText={errors[`${paramPath}-${index}-name`] ? t.nameRequired : ''}
                 />
               </Grid>
               <Grid item xs={4}>
@@ -665,7 +666,7 @@ export default function Home() {
                   fullWidth
                   size="small"
                   variant="outlined"
-                  label="属性描述"
+                  label={t.propertyDescription}
                   value={subParam.description}
                   onChange={(e) => updateSubParameter(parameterIndex, [...parentPath, index], 'description', e.target.value, parentType)}
                 />
@@ -676,7 +677,7 @@ export default function Home() {
                   size="small"
                   variant="outlined"
                   select
-                  label="属性类型"
+                  label={t.propertyType}
                   value={subParam.type}
                   onChange={(e) => updateSubParameter(parameterIndex, [...parentPath, index], 'type', e.target.value as any, parentType)}
                 >
@@ -718,7 +719,7 @@ export default function Home() {
           variant="contained"
           sx={{ mt: 2, fontSize: '0.875rem' }}
         >
-          添加属性
+          {t.addProperty}
         </Button>
       </Box>
     );
@@ -734,28 +735,44 @@ export default function Home() {
   const deleteReturnValue = (index: number) => {
     setApiInterface(prev => ({
       ...prev,
-      returnValues: prev.returnValues.filter((_, i) => i !== index)
+      response: prev.response.filter((_, i) => i !== index)
     }))
+  }
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(generatedJson)
+      setCopySuccess(true)
+      setTimeout(() => setCopySuccess(false), 2000)
+    } catch (err) {
+      console.error('Failed to copy text: ', err)
+    }
   }
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
       <Paper elevation={3} sx={{ p: 4 }}>
+        <Typography variant="h5" gutterBottom align="center" sx={{ mb: 1 }}>
+          {t.title}
+        </Typography>
+        <Typography variant="body2" align="center" color="text.secondary" sx={{ mb: 3 }}>
+          {t.description}
+        </Typography>
         <Stack spacing={4}>
           {/* 接口信息 */}
           <Box>
-            <Typography variant="h5" sx={{ mb: 2 }}>接口信息</Typography>
+            <Typography variant="h5" sx={{ mb: 2 }}>{t.interfaceInfo}</Typography>
             <Grid container spacing={2} alignItems="center">
               <Grid item xs={4}>
                 <TextField
                   fullWidth
                   size="small"
                   variant="outlined"
-                  label="接口名称"
+                  label={t.interfaceName}
                   value={apiInterface.name}
                   onChange={(e) => setApiInterface(prev => ({ ...prev, name: e.target.value }))}
                   error={errors['interface-name']}
-                  helperText={errors['interface-name'] ? '接口名称不能为空' : ''}
+                  helperText={errors['interface-name'] ? t.nameRequired : ''}
                 />
               </Grid>
               <Grid item xs={4}>
@@ -763,15 +780,13 @@ export default function Home() {
                   fullWidth
                   size="small"
                   variant="outlined"
-                  label="接口描述"
+                  label={t.interfaceDescription}
                   value={apiInterface.description}
                   onChange={(e) => setApiInterface(prev => ({ ...prev, description: e.target.value }))}
                   error={errors['interface-description']}
-                  helperText={errors['interface-description'] ? '接口描述不能为空' : ''}
+                  helperText={errors['interface-description'] ? t.descriptionRequired : ''}
                 />
               </Grid>
-              <Grid item xs={3}></Grid>
-              <Grid item xs={1}></Grid>
             </Grid>
           </Box>
 
@@ -779,7 +794,7 @@ export default function Home() {
           <Box>
             <Grid container spacing={2} alignItems="center" sx={{ mb: 2 }}>
               <Grid item>
-                <Typography variant="h5">参数列表</Typography>
+                <Typography variant="h5">{t.parameterList}</Typography>
               </Grid>
               <Grid item>
                 <TextField
@@ -803,11 +818,11 @@ export default function Home() {
                         fullWidth
                         size="small"
                         variant="outlined"
-                        label="参数名称"
+                        label={t.parameterName}
                         value={param.name}
                         onChange={(e) => updateParameter(index, 'name', e.target.value)}
                         error={errors[`parameter-${index}-name`]}
-                        helperText={errors[`parameter-${index}-name`] ? '参数名称不能为空' : ''}
+                        helperText={errors[`parameter-${index}-name`] ? t.nameRequired : ''}
                       />
                     </Grid>
                     <Grid item xs={4}>
@@ -815,7 +830,7 @@ export default function Home() {
                         fullWidth
                         size="small"
                         variant="outlined"
-                        label="参数描述"
+                        label={t.parameterDescription}
                         value={param.description}
                         onChange={(e) => updateParameter(index, 'description', e.target.value)}
                       />
@@ -826,7 +841,7 @@ export default function Home() {
                         size="small"
                         variant="outlined"
                         select
-                        label="参数类型"
+                        label={t.propertyType}
                         value={param.type}
                         onChange={(e) => updateParameter(index, 'type', e.target.value as any)}
                       >
@@ -873,7 +888,7 @@ export default function Home() {
                 size="small"
                 sx={{ fontSize: '0.875rem' }}
               >
-                添加参数
+                {t.addParameter}
               </Button>
             </Box>
           </Box>
@@ -882,24 +897,25 @@ export default function Home() {
           <Box>
             <Grid container spacing={2} alignItems="center" sx={{ mb: 2 }}>
               <Grid item>
-                <Typography variant="h5">返回值列表</Typography>
+                <Typography variant="h5">{t.returnValueList}</Typography>
               </Grid>
               <Grid item>
                 <TextField
                   select
                   size="small"
                   value={responseKey}
-                  onChange={(e) => setResponseKey(e.target.value as 'response' | 'result' | 'return')}
+                  onChange={(e) => setResponseKey(e.target.value as 'response' | 'result' | 'return' | 'returnValue')}
                   sx={{ minWidth: 120 }}
                 >
                   <MenuItem value="response">response</MenuItem>
                   <MenuItem value="result">result</MenuItem>
                   <MenuItem value="return">return</MenuItem>
+                  <MenuItem value="returnValue">returnValue</MenuItem>
                 </TextField>
               </Grid>
             </Grid>
             <Stack spacing={2}>
-              {apiInterface.returnValues.map((ret, index) => (
+              {apiInterface.response.map((ret, index) => (
                 <Box key={index}>
                   <Grid container spacing={2} alignItems="center">
                     <Grid item xs={4}>
@@ -907,11 +923,11 @@ export default function Home() {
                         fullWidth
                         size="small"
                         variant="outlined"
-                        label="返回值名称"
+                        label={t.returnValueName}
                         value={ret.name}
                         onChange={(e) => updateReturnValue(index, 'name', e.target.value)}
                         error={errors[`returnValue-${index}-name`]}
-                        helperText={errors[`returnValue-${index}-name`] ? '返回值名称不能为空' : ''}
+                        helperText={errors[`returnValue-${index}-name`] ? t.nameRequired : ''}
                       />
                     </Grid>
                     <Grid item xs={4}>
@@ -919,7 +935,7 @@ export default function Home() {
                         fullWidth
                         size="small"
                         variant="outlined"
-                        label="返回值描述"
+                        label={t.returnValueDescription}
                         value={ret.description}
                         onChange={(e) => updateReturnValue(index, 'description', e.target.value)}
                       />
@@ -930,7 +946,7 @@ export default function Home() {
                         size="small"
                         variant="outlined"
                         select
-                        label="返回值类型"
+                        label={t.propertyType}
                         value={ret.type}
                         onChange={(e) => updateReturnValue(index, 'type', e.target.value as any)}
                       >
@@ -977,7 +993,7 @@ export default function Home() {
                 size="small"
                 sx={{ fontSize: '0.875rem' }}
               >
-                添加返回值
+                {t.addReturnValue}
               </Button>
             </Box>
           </Box>
@@ -990,7 +1006,7 @@ export default function Home() {
                 onClick={generateJson}
                 size="small"
               >
-                生成JSON
+                {t.generateJson}
               </Button>
             </Box>
             {generatedJson && (
@@ -1001,9 +1017,22 @@ export default function Home() {
                   p: 2,
                   backgroundColor: '#f5f5f5',
                   maxHeight: '400px',
-                  overflow: 'auto'
+                  overflow: 'auto',
+                  position: 'relative'
                 }}
               >
+                <IconButton
+                  onClick={handleCopy}
+                  size="small"
+                  color={copySuccess ? "success" : "default"}
+                  sx={{
+                    position: 'absolute',
+                    right: 8,
+                    top: 8,
+                  }}
+                >
+                  <ContentCopyIcon fontSize="small" />
+                </IconButton>
                 <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordWrap: 'break-word' }}>
                   {generatedJson}
                 </pre>
