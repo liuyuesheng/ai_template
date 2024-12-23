@@ -51,7 +51,7 @@ export const translations: Translations = {
     descriptionRequired: 'Description is required',
   },
   zh: {
-    title: 'AI Function Calling生成器',
+    title: 'AI Function Calling 生成器',
     description: '为ChatGPT Function Calling和MCP协议生成结构化接口描述',
     interfaceInfo: '接口信息',
     interfaceName: '接口名称',
