@@ -2,6 +2,7 @@ interface Translations {
   [key: string]: {
     title: string;
     description: string;
+    keywords: string;
     interfaceInfo: string;
     interfaceName: string;
     interfaceDescription: string;
@@ -29,6 +30,7 @@ export const translations: Translations = {
   en: {
     title: 'AI Function Calling Generator',
     description: 'Generate structured interface descriptions for ChatGPT Function Calling and MCP protocols',
+    keywords: 'AI,ChatGPT,Function Calling,Interface Generator,MCP Protocol,JSON Generator',
     interfaceInfo: 'Interface Information',
     interfaceName: 'Interface Name',
     interfaceDescription: 'Interface Description',
@@ -53,6 +55,7 @@ export const translations: Translations = {
   zh: {
     title: 'AI Function Calling 生成器',
     description: '为ChatGPT Function Calling和MCP协议生成结构化接口描述',
+    keywords: 'AI,ChatGPT,Function Calling,接口生成器,MCP协议,JSON生成器',
     interfaceInfo: '接口信息',
     interfaceName: '接口名称',
     interfaceDescription: '接口描述',
