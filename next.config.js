@@ -3,7 +3,7 @@ const nextConfig = {
   reactStrictMode: true,
   // 开启图片优化
   images: {
-    domains: ['yourdomain.com'],
+    domains: ['www.tpfunc.top'],
   },
   // 开启压缩
   compress: true,
